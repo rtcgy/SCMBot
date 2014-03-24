@@ -301,6 +301,8 @@ namespace SCMBot
                 }
                 else panel1.Enabled = false;
             }
+            else
+                steam_srch.recentInputList = new saveTabLst();
         }
 
 //=================================================== Settings Stuff ====================== End ==============================

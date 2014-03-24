@@ -434,21 +434,29 @@ namespace SCMBot
 
         //End JSON
 
-        protected void doMessage(flag myflag, int searchId, string message)
+        protected void doMessage(flag myflag, int searchId, string message, bool isMain)
         {
-
-            if (delegMessage != null)
+            try
             {
-                Control target = delegMessage.Target as Control;
 
-                if (target != null && target.InvokeRequired)
+                if (delegMessage != null)
                 {
-                    target.Invoke(delegMessage, new object[] { this, message, searchId, myflag });
+                    Control target = delegMessage.Target as Control;
+
+                    if (target != null && target.InvokeRequired)
+                    {
+                        target.Invoke(delegMessage, new object[] { this, message, searchId, myflag, isMain });
+                    }
+                    else
+                    {
+                        delegMessage(this, message, searchId, myflag, isMain);
+                    }
                 }
-                else
-                {
-                    delegMessage(this, message, searchId, myflag);
-                }
+
+            }
+            catch (Exception e)
+            {
+                Main.AddtoLog(e.Message);
             }
         }
 
@@ -456,9 +464,9 @@ namespace SCMBot
         {
             Main.reqPool.WaitOne();
 
-            doMessage(flag.StripImg, 0, string.Empty);
+            doMessage(flag.StripImg, 0, string.Empty, true);
             var res = Main.SendPostRequest(data, url, refer, cookieCont, tolog);
-            doMessage(flag.StripImg, 1, string.Empty);
+            doMessage(flag.StripImg, 1, string.Empty, true);
             
             Main.reqPool.Release();
 
@@ -470,9 +478,9 @@ namespace SCMBot
         {
             Main.reqPool.WaitOne();
 
-            doMessage(flag.StripImg, 0, string.Empty);
+            doMessage(flag.StripImg, 0, string.Empty, true);
             var res = Main.GetRequest(url, cookieCont);
-            doMessage(flag.StripImg, 1, string.Empty);
+            doMessage(flag.StripImg, 1, string.Empty, true);
             
             //MessageBox.Show("blocked");
 
@@ -724,8 +732,8 @@ namespace SCMBot
                             //Damn, Mr.Crowley... WTF!?
                             if (NotSetHead && !full)
                             {
-                                doMessage(flag.SetHeadName, scanID, ourItemInfo.name);
-                                scanName = ourItemInfo.name;
+                                doMessage(flag.SetHeadName, scanID, ourItemInfo.name, true);
+                                scanInput.Name = ourItemInfo.name;
                                 NotSetHead = false;
                             }
 

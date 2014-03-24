@@ -8,45 +8,30 @@ using System.Collections.Generic;
 
 namespace SCMBot
 {
-    public class SteamSiteLst : List<SteamSite>
-    {
-        //public string CurrencyName { set; get; }
-    }
-
     partial class SteamSite
     {
         public string UserName { set; get; }
         public string Password { set; get; }
 
-        public string wishedPrice { set; get; }
-        public string scanDelay { set; get; }
-        public string pageLink { set; get; }
         public int scanID { set; get; }
+        public int mainDelay { get; set; }
+
 
         public string linkTxt { set; get; }
    
         public bool Logged { set; get; }
         public bool LoginProcess { set; get; }
         public bool scaninProg { set; get; }
-        public bool toBuy { set; get; }
+
         public bool BuyNow { set; get; }
         public bool LoadOnSale { get; set; }
         public bool isRemove { get; set; }
 
         public bool IgnoreWarn { get; set; }
 
-        public int BuyQuant { get; set; }
-
-        public int ResellType { get; set; }
-        public string ResellPrice { get; set; }
-
         public int invApp { get; set; }
 
-        public bool scanRecent { get; set; }
-        public bool scanPage { get; set; }
         public bool NotSetHead { get; set; }
-
-        public string scanName { get; set; }
 
         public static string myUserId;
 
@@ -54,10 +39,17 @@ namespace SCMBot
 
         public CookieContainer cookieCont { set; get; }
 
+        public saveTabLst recentInputList { set; get; }
+        public BindingList<MainScanItem.LogItem> logContainer = new BindingList<MainScanItem.LogItem>();
+
+
+        public saveTab scanInput { set; get; }
+
         public Semaphore Sem = new Semaphore(0, 1);
 
         private BackgroundWorker loginThread = new BackgroundWorker();
         private BackgroundWorker scanThread = new BackgroundWorker();
+        private BackgroundWorker listedThread = new BackgroundWorker();
         private BackgroundWorker reqThread = new BackgroundWorker();
         private BackgroundWorker sellThread = new BackgroundWorker();
 
@@ -75,6 +67,9 @@ namespace SCMBot
 
             scanThread.WorkerSupportsCancellation = true;
             scanThread.DoWork += new DoWorkEventHandler(scanThread_DoWork);
+
+            listedThread.WorkerSupportsCancellation = true;
+            listedThread.DoWork += new DoWorkEventHandler(listedThread_DoWork);
 
             reqThread.WorkerSupportsCancellation = true;
             reqThread.DoWork += new DoWorkEventHandler(reqThread_DoWork);
@@ -130,7 +125,7 @@ namespace SCMBot
         {
             ThreadStart threadStart = delegate() {
                 SendGet(_logout, cookieCont);
-                doMessage(flag.Logout_, 0, string.Empty);
+                doMessage(flag.Logout_, 0, string.Empty, true);
                 Logged = false;
             };
             Thread pTh = new Thread(threadStart);
@@ -143,7 +138,7 @@ namespace SCMBot
             ThreadStart threadStart = delegate()
             {
                 SendGet(_lang_chg + lang, cookieCont);
-                doMessage(flag.Lang_Changed, 0, lang);
+                doMessage(flag.Lang_Changed, 0, lang, true);
             };
             Thread pTh = new Thread(threadStart);
             pTh.IsBackground = true;
@@ -167,6 +162,27 @@ namespace SCMBot
                 scaninProg = false;
                 Sem.Release();
                 scanThread.CancelAsync();
+            }
+        }
+
+
+
+        internal void ScanNewListed()
+        {
+            if (listedThread.IsBusy != true)
+            {
+                scaninProg = true;
+                listedThread.RunWorkerAsync();
+            }
+        }
+
+        public void CancelListed()
+        {
+            if (listedThread.WorkerSupportsCancellation == true && listedThread.IsBusy)
+            {
+                scaninProg = false;
+                Sem.Release();
+                listedThread.CancelAsync();
             }
         }
 
@@ -206,7 +222,7 @@ namespace SCMBot
                 var url = _lists + GetUrlApp(invApp, false).App + "/" + ItName + "/render/";
                 ParseLotList(SendGet(url, cookieCont), tempLst, currencies, false);
                 if (tempLst.Count != 0)
-                    doMessage(flag.InvPrice, pos, tempLst[0].Price.ToString());
+                    doMessage(flag.InvPrice, pos, tempLst[0].Price.ToString(), true);
             };
             Thread pTh = new Thread(threadStart);
             pTh.IsBackground = true;
@@ -263,9 +279,9 @@ namespace SCMBot
             }
 
             if (invCount > 0)
-                doMessage(flag.Inventory_Loaded, 0, string.Empty);
+                doMessage(flag.Inventory_Loaded, 0, string.Empty, true);
             else
-                doMessage(flag.Inventory_Loaded, 1, string.Empty);
+                doMessage(flag.Inventory_Loaded, 1, string.Empty, true);
 
         }
 
@@ -298,14 +314,14 @@ namespace SCMBot
                         }
                     }
 
-                    doMessage(flag.Sell_progress, 0, (incr * (i + 1)).ToString());
+                    doMessage(flag.Sell_progress, 0, (incr * (i + 1)).ToString(), true);
                 }
 
-                doMessage(flag.Items_Sold, 0, string.Empty);
+                doMessage(flag.Items_Sold, 0, string.Empty, true);
             }
             else
             {
-                doMessage(flag.Items_Sold, 1, string.Empty);
+                doMessage(flag.Items_Sold, 1, string.Empty, true);
             }
         }
 
@@ -313,7 +329,7 @@ namespace SCMBot
         private void reqThread_DoWork(object sender, DoWorkEventArgs e)
         {
 
-            doMessage(flag.Search_success, 0, ParseSearchRes(SendGet(linkTxt, cookieCont), searchList, currencies));
+            doMessage(flag.Search_success, 0, ParseSearchRes(SendGet(linkTxt, cookieCont), searchList, currencies), true);
         }
 
 
@@ -323,7 +339,7 @@ namespace SCMBot
 
             LoginProcess = true;
             Logged = false;
-            doMessage(flag.Rep_progress, 0, "20");
+            doMessage(flag.Rep_progress, 0, "20", true);
             //if (worker.CancellationPending == true)
             //  return;
 
@@ -331,8 +347,8 @@ namespace SCMBot
 
             if (accInfo != string.Empty)
             {
-                doMessage(flag.Already_logged, 0, accInfo);
-                doMessage(flag.Rep_progress, 0, "100");
+                doMessage(flag.Already_logged, 0, accInfo, true);
+                doMessage(flag.Rep_progress, 0, "100", true);
                 LoginProcess = false;
                 Logged = true;
                 return;
@@ -347,7 +363,7 @@ namespace SCMBot
                 return;
             }
 
-            doMessage(flag.Rep_progress, 0, "40");
+            doMessage(flag.Rep_progress, 0, "40", true);
             //  if (worker.CancellationPending == true)
             //   return;
 
@@ -361,7 +377,7 @@ namespace SCMBot
             {
                 firstTry = SendPost(string.Format(loginReq, finalpass, UserName, string.Empty, string.Empty, string.Empty,
                                                                 string.Empty, string.Empty, rRSA.TimeStamp), _dologin, _ref, true);
-                doMessage(flag.Rep_progress, 0, "60");
+                doMessage(flag.Rep_progress, 0, "60", true);
                 // if (worker.CancellationPending == true)
                 //     return;
             }
@@ -378,7 +394,7 @@ namespace SCMBot
                 if (rProcess.Message == "Incorrect login")
                 {
                     Main.AddtoLog("Incorrect login");
-                    doMessage(flag.Login_cancel, 0, "Incorrect login");
+                    doMessage(flag.Login_cancel, 0, "Incorrect login", true);
                     e.Cancel = true;
                     LoginProcess = false;
                     return;
@@ -410,7 +426,7 @@ namespace SCMBot
                     Main.loadImg(newcap, guardCheckForm.capchImg, false, false);
                 }
 
-                doMessage(flag.Rep_progress, 0, "80");
+                doMessage(flag.Rep_progress, 0, "80", true);
                 //    if (worker.CancellationPending == true)
                 //       return;
 
@@ -430,8 +446,8 @@ namespace SCMBot
                     if (rFinal.Success && rFinal.isComplete)
                     {
                         string accInfo2 = GetNameBalance(cookieCont, currencies);
-                        doMessage(flag.Login_success, 0, accInfo2);
-                        doMessage(flag.Rep_progress, 0, "100");
+                        doMessage(flag.Login_success, 0, accInfo2, true);
+                        doMessage(flag.Rep_progress, 0, "100", true);
                         Logged = true;
                         Main.AddtoLog("Login Success");
                     }
@@ -445,7 +461,7 @@ namespace SCMBot
                 else
                 {
                     Main.AddtoLog("Login Guard Check Cancelled");
-                    doMessage(flag.Login_cancel, 0, "Login Cancelled");
+                    doMessage(flag.Login_cancel, 0, "Login Cancelled", true);
                     e.Cancel = true;
                 }
 
@@ -457,15 +473,15 @@ namespace SCMBot
             {
                 string accInfo3 = GetNameBalance(cookieCont, currencies);
 
-                doMessage(flag.Login_success, 0, accInfo3);
-                doMessage(flag.Rep_progress, 0, "100");
+                doMessage(flag.Login_success, 0, accInfo3, true);
+                doMessage(flag.Rep_progress, 0, "100", true);
                 Main.AddtoLog("Login Success");
                 Logged = true;
             }
             else
             {
                 Main.AddtoLog("Login Guard Check Cancelled");
-                doMessage(flag.Login_cancel, 0, string.Empty);
+                doMessage(flag.Login_cancel, 0, string.Empty, true);
                 e.Cancel = true;
                 Logged = false;
             }
@@ -475,7 +491,7 @@ namespace SCMBot
 
 
 
-        public void BuyLogic(int wished, string sessid, ScanItem ourItem)
+        public void BuyLogic(int wished, string sessid, ScanItem ourItem, saveTab Input, int buyCont, bool ismain)
         {
             int total = ourItem.Price + ourItem.Fee;
             string totalStr = total.ToString();
@@ -484,42 +500,42 @@ namespace SCMBot
 
             if (total < wished)
             {
-                if (toBuy)
+                if (Input.ToBuy)
                 {
-                    var buyresp = BuyItem(cookieCont, sessid, ourItem.ListringId, pageLink, ourItem.Price.ToString(), ourItem.Fee.ToString(), totalStr);
+                    var buyresp = BuyItem(cookieCont, sessid, ourItem.ListringId, Input.Link, ourItem.Price.ToString(), ourItem.Fee.ToString(), totalStr);
 
                     if (buyresp.Succsess)
                     {
                         //Resell 
-                        if (ResellType != 0)
+                        if (Input.ResellType != 0)
                         {
-                            StartResellThread(totalStr, ResellPrice, ourItem.Type, ourItem.ItemName);
+                            StartResellThread(totalStr, Input.ResellPrice, ourItem.Type, ourItem.ItemName);
                         }
 
-                        doMessage(flag.Success_buy, scanID, buyresp.Mess);
-                        doMessage(flag.Price_btext, scanID, prtoTxt);
-                        buyCounter++;
+                        doMessage(flag.Success_buy, scanID, buyresp.Mess, ismain);
+                        doMessage(flag.Price_btext, scanID, prtoTxt, ismain);
+                        buyCont++;
 
-                        if (buyCounter == BuyQuant)
+                        if (buyCont == Input.BuyQnt)
                         {
-                            doMessage(flag.Send_cancel, scanID, string.Empty);
+                            doMessage(flag.Send_cancel, scanID, string.Empty, ismain);
                         }
 
                     }
                     else
                     {
-                        doMessage(flag.Error_buy, scanID, buyresp.Mess);
+                        doMessage(flag.Error_buy, scanID, buyresp.Mess, ismain);
                     }
 
                 }
-                else doMessage(flag.Price_htext, scanID, prtoTxt);
+                else doMessage(flag.Price_htext, scanID, prtoTxt, ismain);
             }
             else
-                doMessage(flag.Price_text, scanID, prtoTxt);
+                doMessage(flag.Price_text, scanID, prtoTxt, ismain);
         }
 
 
-        public bool fillLotList(string link, bool full)
+        public bool fillLotList(string link, bool full, bool ismain)
         {
             lotList.Clear();
 
@@ -527,7 +543,7 @@ namespace SCMBot
            
             if (ret != 5)
             {
-                doMessage(flag.Error_scan, scanID, ret.ToString());
+                doMessage(flag.Error_scan, scanID, ret.ToString(), ismain);
                 return false;
             }
             else return true;
@@ -539,8 +555,8 @@ namespace SCMBot
             BackgroundWorker worker = sender as BackgroundWorker;
             string sessid = GetSessId(cookieCont);
 
-            string url = pageLink;
-            int fint = pageLink.IndexOf('?');
+            string url = scanInput.Link;
+            int fint = url.IndexOf('?');
             if (fint == -1)
             {
                 url += "/render/";
@@ -558,34 +574,33 @@ namespace SCMBot
 
                 if (lotList.Count == 0)
                 {
-                    doMessage(flag.Error_scan, scanID, "0");
+                    doMessage(flag.Error_scan, scanID, "0", true);
                 }
                 else
                 {
                     string totalStr = Convert.ToString(lotList[0].Price + lotList[0].Fee);
-                    var buyresp = BuyItem(cookieCont, sessid, lotList[0].ListringId, pageLink, lotList[0].Price.ToString(), lotList[0].Fee.ToString(), totalStr);
+                    var buyresp = BuyItem(cookieCont, sessid, lotList[0].ListringId, scanInput.Link, lotList[0].Price.ToString(), lotList[0].Fee.ToString(), totalStr);
 
                     BuyNow = false;
                     if (buyresp.Succsess)
                     {
-                        doMessage(flag.Success_buy, scanID, buyresp.Mess);
+                        doMessage(flag.Success_buy, scanID, buyresp.Mess, true);
                     }
                     else
                     {
-                        doMessage(flag.Error_buy, scanID, buyresp.Mess);
+                        doMessage(flag.Error_buy, scanID, buyresp.Mess, true);
                     }
                 }
                 return;
             }
             else
             {
-                wishedPrice = GetSweetPrice(wishedPrice);
+                //wishedPrice = GetSweetPrice(wishedPrice);
             }
 
+            int wished = Convert.ToInt32(GetSweetPrice(scanInput.Price));
 
-            int wished = Convert.ToInt32(wishedPrice);
-
-            int delay = Convert.ToInt32(scanDelay);
+            int delay = Convert.ToInt32(scanInput.Delay);
             int prog = 1;
 
             buyCounter = 0;
@@ -593,45 +608,65 @@ namespace SCMBot
             //Scan cycle
             while (worker.CancellationPending == false)
             {
-                if (scanPage)
-                {
+                    if (fillLotList(url, false, true))
+                        BuyLogic(wished, sessid, lotList[0], scanInput, buyCounter, true);
 
-                    if (fillLotList(url, false))
-                        BuyLogic(wished, sessid, lotList[0]);
-                }
-
-                if (scanRecent)
-                {
-                    if (fillLotList(recentMarket, true))
-                    {
-
-                        bool found = false;
-
-                        for (int i = 0; i < lotList.Count; i++)
-                        {
-                            if (lotList[i].ItemName == scanName)
-                            {
-                                BuyLogic(wished, sessid, lotList[i]);
-                                found = true;
-                                break;
-                            }
-                        }
-
-                        if (!found)
-                        {
-                            doMessage(flag.Price_text, scanID, "None");
-                        }
-                    }
-
-                }
-
-                doMessage(flag.Scan_progress, scanID, prog.ToString());
+                    doMessage(flag.Scan_progress, scanID, prog.ToString(), true);
 
                 Sem.WaitOne(delay);
                 prog++;
             }
 
-            doMessage(flag.Scan_cancel, scanID, string.Empty);
+            doMessage(flag.Scan_cancel, scanID, string.Empty, true);
+
+        }
+
+
+        public void listedThread_DoWork(object sender, DoWorkEventArgs e)
+        {
+            BackgroundWorker worker = sender as BackgroundWorker;
+            string sessid = GetSessId(cookieCont);
+           
+            int prog = 1;
+
+            int[] buyCounter = new int[recentInputList.Count];
+
+            for (int i = 0; i < buyCounter.Length; i++)
+            {
+                buyCounter[i] = 0; 
+            }
+
+
+            //Scan cycle
+            while (worker.CancellationPending == false)
+            {
+                bool found = false;
+
+                if (fillLotList(recentMarket, true, false))
+                {
+
+                    for (int i = 0; i < lotList.Count; i++)
+                    {
+                        for (int k = 0; k < recentInputList.Count; k++)
+                        {
+                            if (lotList[i].ItemName == recentInputList[k].Name)
+                            {
+                                found = true;
+                                BuyLogic(Convert.ToInt32(GetSweetPrice(recentInputList[k].Price)), sessid, lotList[i], recentInputList[k], buyCounter[k], false);
+                                continue;
+                            }
+                        }
+
+                    }
+
+                    if (!found)
+                        doMessage(flag.Price_text, 1, "Not found", false);
+
+                    Sem.WaitOne(mainDelay);
+                    prog++;
+                }
+
+            }
 
         }
 
@@ -643,7 +678,7 @@ namespace SCMBot
                 int sellPrice = Convert.ToInt32(lotPrice);
                 int resell = Convert.ToInt32(GetSweetPrice(resellPrice));
 
-                switch (ResellType)
+                switch (scanInput.ResellType)
                 {
                     case 1: sellPrice += resell;
                         break;
@@ -657,7 +692,7 @@ namespace SCMBot
                 var req = string.Format(sellReq, GetSessId(cookieCont), appType.App, appType.Context, inventList.Find(p => p.Name == markName).AssetId, sellPrice.ToString());
 
                 SendPost(req, _sellitem, _market, false);
-                doMessage(flag.Resold, 0, markName);
+                doMessage(flag.Resold, 0, markName, true);
 
             };
             Thread pTh = new Thread(threadStart);
@@ -665,6 +700,8 @@ namespace SCMBot
             pTh.Start();
 
         }
+
+
 
 
     }
